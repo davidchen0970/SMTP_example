@@ -1,0 +1,50 @@
+# 建立本地憑證目錄
+mkdir -p /mnt/d/github/SMTP/docker-certs
+
+# 產生自簽憑證與私鑰（有效期 365 天）
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /mnt/d/github/SMTP/docker-certs/smtp4dev.key \
+  -out /mnt/d/github/SMTP/docker-certs/smtp4dev.crt \
+  -subj "/C=TW/ST=Taipei/L=Taipei/O=Dev/CN=smtp4dev"
+
+---
+
+# 建立用於持久化郵件資料的 Docker Volume
+docker volume create smtp4dev-data
+
+# 建立 smtp4dev 容器，並啟用 STARTTLS
+docker run -itd --name smtp4dev `
+  --network smtp-net `
+  -p 8080:80 -p 25:25 `
+  -v smtp4dev-data:/smtp4dev `
+  -v "D:\github\SMTP\docker-certs:/certs:ro" `
+  -e ServerOptions__TlsMode=StartTls `
+  -e ServerOptions__TlsCertificate=/certs/smtp4dev.crt `
+  -e ServerOptions__TlsCertificatePrivateKey=/certs/smtp4dev.key `
+  -e ServerOptions__HostName=smtp4dev `
+  rnwood/smtp4dev
+
+# SMTP 客戶端
+docker run -itd --name libesmtp-test `
+  --network smtp-net `
+  -v "D:\github\SMTP\docker-certs:/certs:ro" `
+  -v "D:\github\SMTP\projects:/projects:rw" `
+  -v "D:\github\SMTP\libESMTP:/libESMTP:rw" `
+  ubuntu:22.04 bash
+
+apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    meson \
+    ninja-build \
+    pkg-config \
+    libssl-dev \
+    python3 \
+    openssl
+
+cd /libESMTP
+meson setup builddir
+ninja -C builddir
+ninja -C builddir install
+ldconfig
+cd /
